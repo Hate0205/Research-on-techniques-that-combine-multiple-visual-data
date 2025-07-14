@@ -28,19 +28,23 @@ Cần tải 4 gói:
    git clone https://github.com/Hate0205/Research-on-techniques-that-combine-multiple-visual-data.git
    cd Research-on-techniques-that-combine-multiple-visual-data
 
-2. Tạo và kích hoạt môi trường ảo
-**### Python ≥3.8
-python -m venv venv
-
-### Windows
-venv\Scripts\activate
-
-#### macOS/Linux
-source venv/bin/activate
-
-3. Cài đặt phụ thuộc
-pip install --upgrade pip
-pip install -r requirements.txt**
-
-## Sử dụng 
+2. **Tạo và kích hoạt môi trường ảo**
+  ### Python ≥3.8
+  ```bash
+  python -m venv venv
+  ```
+  ### Windows
+  ```bash
+  venv\Scripts\activate
+  ```
+  #### macOS/Linux
+  ```bash
+  source venv/bin/activate
+  ```
+  
+  3. Cài đặt phụ thuộc
+  ```bash
+  pip install --upgrade pip
+  pip install -r requirements.txt
+  ```
 
