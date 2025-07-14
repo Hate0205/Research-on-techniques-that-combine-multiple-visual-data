@@ -29,7 +29,7 @@ Cần tải 4 gói:
    cd Research-on-techniques-that-combine-multiple-visual-data
 
 2. Tạo và kích hoạt môi trường ảo
-### Python ≥3.8
+**### Python ≥3.8
 python -m venv venv
 
 ### Windows
@@ -40,7 +40,7 @@ source venv/bin/activate
 
 3. Cài đặt phụ thuộc
 pip install --upgrade pip
-pip install -r requirements.txt
+pip install -r requirements.txt**
 
 ## Sử dụng 
 
