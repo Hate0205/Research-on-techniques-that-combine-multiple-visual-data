@@ -1,0 +1,7 @@
+names:
+- Car
+- Pedestrian
+- Cyclist
+nc: 3
+train: /content/train
+val:   /content/valid
