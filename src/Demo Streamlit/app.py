@@ -150,7 +150,7 @@ if st.button("Run pipeline") and files:
         u, v, cam_xyz = project_lidar(pc, mats)
 
         # detect
-        MODEL_PATH = "best.pt"  # adjust path
+        MODEL_PATH = r"D:\study\Thesis\Thesis\results_experiments\Yolov8\Using_Adapter_to_Convert_3_chanels\Log_Train\yolov8n-RGBD\seed_42\weights\best.pt"  # adjust path
         model      = YOLO(MODEL_PATH)
         img_bgr    = cv2.imread(str(p_img))
         bboxes     = detect_bboxes(img_bgr, model, conf_thresh=0)
