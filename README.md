@@ -14,11 +14,11 @@ Cần tải 4 gói:
 - **Left color images of object data set** (12 GB)  
   → Ảnh RGB (thư mục `image_2/`)  
 - **Velodyne point clouds** (29 GB)  
-  → Dữ liệu point-cloud (thư mục `velodyne/`)  
+  → Dữ liệu point-cloud (thư mục `data_object_velodyne/`)  
 - **Camera calibration matrices of object data set** (16 MB)  
-  → Ma trận hiệu chỉnh camera (thư mục `calib/`)  
+  → Ma trận hiệu chỉnh camera (thư mục `data_object_calib/`)  
 - **Training labels of object data set** (5 MB)  
-  → Nhãn training (thư mục `label_2/`)
+  → Nhãn training (thư mục `data_object_label_2/`)
 
 
 ## Cài đặt
