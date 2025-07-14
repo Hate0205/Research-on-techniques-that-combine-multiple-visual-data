@@ -1,7 +1,7 @@
 # Thesis: Nghiên cứu các kỹ thuật kết hợp nhiều dữ liệu hình ảnh
 
 ## Tổng quan
-Dự án này nghiên cứu các phương pháp kết hợp ảnh 2D RGB và dữ liệu đám mây điểm 3D (từ LiDAR) để nâng cao hiệu quả nhận dạng đối tượng. Chúng tôi sử dụng YOLOv8 của Ultralytics và Open3D để triển khai và so sánh các chiến lược kết hợp khác nhau, đồng thời cung cấp một bản demo trên Streamlit để trực quan hóa kết quả một cách tương tác.
+Dự án này nghiên cứu các phương pháp kết hợp ảnh 2D RGB và dữ liệu đám mây điểm 3D (từ LiDAR) để tính được khoảng cách từ camera đến các đối tượng và nâng cao hiệu quả nhận dạng đối tượng. Chúng tôi sử dụng YOLOv8 của Ultralytics và Open3D để triển khai và so sánh các chiến lược kết hợp khác nhau, đồng thời cung cấp một bản demo trên Streamlit để trực quan hóa kết quả.
 
 ## Dữ liệu gốc (raw_data)
 
