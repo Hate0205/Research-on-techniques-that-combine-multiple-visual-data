@@ -1,6 +1,6 @@
 streamlit
 numpy
-opencv-python == 4.11.0
+opencv-python-headless==4.11.0
 Pillow
 matplotlib
 ultralytics
