@@ -1,0 +1,13 @@
+streamlit
+numpy
+opencv-python
+Pillow
+matplotlib
+ultralytics
+open3d
+torch
+torchvision
+tqdm
+pyyaml
+piq
+scikit-learn
