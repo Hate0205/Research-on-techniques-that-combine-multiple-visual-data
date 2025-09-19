@@ -22,7 +22,7 @@ raw_root   = Path(st.sidebar.text_input("Thư mục KITTI raw", ""))
 calib_dir  = Path(st.sidebar.text_input("Thư mục calibration", ""))
 fps        = st.sidebar.number_input("FPS cho video xuất", 1, 30, 10)
 voxel_size = st.sidebar.slider("Voxel size (m)", 0.05, 1.0, 0.1, 0.05)
-# radius slider: max = 5, default = 1
+# radius slider
 radius     = st.sidebar.slider(
     "Radius (m) for neighbor search", 0.1, 5.0, 0.5, 0.1
 )
@@ -31,21 +31,24 @@ st.title("KITTI → Det+Seg YOLOv8 + LIDAR + RadiusNN (Min/Median/Max/Mean)")
 
 # === 2) Parse timestamps.txt ===
 def parse_timestamps(fpath: Path):
+    # đọc và lưu mốc thời gian dưới dạng float64 UNIX seconds
     lines = fpath.read_text().splitlines()
     ts = []
     for L in lines:
         if not L:
             continue
-        date_str, frac = L.split('.')
-        dt = datetime.datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
-        ts.append(dt.timestamp() + float("0." + frac))
+        date_str, frac = L.split('.')                                   # Tách phần trước và sau dấu chấm: "YYYY-mm-dd HH:MM:SS" và "sssssssss"
+        dt = datetime.datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")  # Parse phần nguyên
+        ts.append(dt.timestamp() + float("0." + frac))                  # + phần thập phân giây
     return np.array(ts, dtype=np.float64)
 
 # === 3) Load KITTI calibration ===
 @st.cache_data
 def load_calibration(cam2cam: Path, velo2cam: Path):
-    numpat = r'[-+]?(?:\d*\.\d+|\d+)(?:[eE][-+]?\d+)?'
+    numpat = r'[-+]?(?:\d*\.\d+|\d+)(?:[eE][-+]?\d+)?' # Regex số
     mats = {}
+
+    # Đọc file calib_cam_to_cam.txt để lấy R_rect_02 (R0) và P_rect_02 (P2)
     for L in cam2cam.read_text().splitlines():
         if ':' not in L:
             continue
@@ -55,6 +58,8 @@ def load_calibration(cam2cam: Path, velo2cam: Path):
             mats['R0'] = vals.reshape(3, 3)
         elif name.strip() == "P_rect_02":
             mats['P2'] = vals.reshape(3, 4)
+
+    # Đọc file calib_velo_to_cam.txt lấy R và T để ghép thành Tr (3x4)
     for L in velo2cam.read_text().splitlines():
         if ':' not in L:
             continue
@@ -74,18 +79,29 @@ def voxel_downsample_centroid(pts: np.ndarray, vsz: float):
     vox = {}
     for I, p in zip(map(tuple, idxs), pts):
         vox.setdefault(I, []).append(p)
+    # Lấy trọng tâm (mean) của từng voxel → giảm số điểm mà vẫn giữ đặc trưng hình học
     return np.array([np.mean(v, axis=0) for v in vox.values()], dtype=np.float32)
 
 # === 5) Project LiDAR → pixel + cam_xyz ===
 def project_lidar(xyz: np.ndarray, mats: dict):
     P2, R0, Tr = mats['P2'], mats['R0'], mats['Tr']
+
+    # Tạo homogeneous
     ones = np.ones((xyz.shape[0], 1), np.float32)
     Xh = np.hstack([xyz, ones]).T
+
+    # Chuyển LiDAR → camera-frame
     cam = R0 @ (Tr @ Xh)
+
+    # Chuyển sang homogeneous lần 2 để apply P2
     Ch  = np.vstack([cam, ones.T])
     Y   = P2 @ Ch
+
+    # Chuyển về dạng (N×3)
     Yt  = Y.T
-    valid = Yt[:, 2] > 0
+    valid = Yt[:, 2] > 0        # Chỉ giữ điểm nằm trước camera (z>0)
+
+    # Pixel coordinates
     uv = (Yt[valid, :2] / Yt[valid, 2:3]).astype(int)
     return uv[:, 0], uv[:, 1], cam.T[valid]
 
@@ -100,10 +116,10 @@ def load_seg_model():
 
 # === 7) Detect bounding boxes ===
 def detect_bboxes(img: np.ndarray, model, conf_thresh=0.0):
-    res  = model.predict(img, task='detect', verbose=False)[0]
-    xyxy = res.boxes.xyxy.cpu().numpy()
+    res  = model.predict(img, task='detect', verbose=False)[0]      # Chạy detect 1 frame ảnh
+    xyxy = res.boxes.xyxy.cpu().numpy()                             # Toạ độ bbox: [x1,y1,x2,y2]
     conf = res.boxes.conf.cpu().numpy().tolist()
-    cls  = res.boxes.cls.cpu().numpy().astype(int).tolist()
+    cls  = res.boxes.cls.cpu().numpy().astype(int).tolist()         # class_id
     bbs = []
     for b, f, c in zip(xyxy, conf, cls):
         if f >= conf_thresh:
@@ -189,11 +205,11 @@ def visualize(img, u, v, cam_xyz, bbs, segs, mode, radius, det_model):
     out = img.copy()
 
     # only points inside image
-    valid = (u >= 0) & (u < W) & (v >= 0) & (v < H)
-    u0, v0, d0   = u[valid], v[valid], d_all[valid]
-    xyz0         = cam_xyz[valid]
+    valid = (u >= 0) & (u < W) & (v >= 0) & (v < H)     # Lọc các điểm có pixel nằm trong khung ảnh
+    u0, v0, d0   = u[valid], v[valid], d_all[valid]     # Pixel & depth đã lọc
+    xyz0         = cam_xyz[valid]                       # Tọa độ 3D tương ứng đã lọc
 
-    # draw all detection bboxes
+    # vẽ các bbox được phát hiện
     for o in bbs:
         x1, y1, x2, y2 = map(int, o["bbox"])
         cid = o["class_id"]
@@ -206,61 +222,61 @@ def visualize(img, u, v, cam_xyz, bbs, segs, mode, radius, det_model):
     for o in bbs:
         best_mask, best_iou = None, 0.0
         for s in segs:
-            iou = bbox_iou(o["bbox"], s["bbox"])
+            iou = bbox_iou(o["bbox"], s["bbox"])           # Tính IoU giữa bbox detect và bbox của seg
             if iou > best_iou:
-                best_iou, best_mask = iou, s["mask"]
-        if best_mask is None or best_iou < 0.1:
+                best_iou, best_mask = iou, s["mask"]       # Lưu mask có IoU lớn nhất
+        if best_mask is None or best_iou < 0.1:            # Nếu không có mask đủ tốt thì bỏ qua 
             continue
 
-        # segment points
-        seg_mask = best_mask[v0, u0]
+        # segment points: : chọn các điểm LiDAR nằm bên trong mask (theo pixel (u0,v0))
+        seg_mask = best_mask[v0, u0]            
         pu, pv, pd = u0[seg_mask], v0[seg_mask], d0[seg_mask]
         xyz_seg    = xyz0[seg_mask]
         if pd.size == 0:
             continue
 
-        # compute 3D centroid of segment
-        center3D = np.mean(xyz_seg, axis=0)
+        # compute centroid of segment
+        center3D = np.mean(xyz_seg, axis=0)     # Tâm của đám điểm thuộc object
 
-        # Radius NN: pick points within radius
+        # Radius NN: lọc điểm gần tâm trong bán kính radius
         d2c    = np.linalg.norm(xyz_seg - center3D, axis=1)
         r_mask = d2c <= radius
         pu_rn, pv_rn, pd_rn = pu[r_mask], pv[r_mask], pd[r_mask]
 
-        # compute statistic on pd_rn
+        # compute statistic on pd_rn (min/median/max/mean)
         val = compute_val(pd_rn, mode)
 
-        # draw entire segment point cloud
+        # tô màu toàn bộ điểm segment theo depth toàn frame
         for ui, vi, di in zip(pu, pv, pd):
             norm = (di - dmin) / (dmax - dmin + 1e-6)
             r, g, b, _ = CMAP(norm)
             cv2.circle(out, (int(ui),int(vi)), 1,
                        (int(255*b), int(255*g), int(255*r)), -1)
 
-        # highlight on subset
+        # highlight điểm đại diện gần giá trị thống kê
         if pd_rn.size > 0:
-            idx0 = int(np.argmin(np.abs(pd_rn - val)))
-            cx, cy = int(pu_rn[idx0]), int(pv_rn[idx0])
-            cv2.circle(out, (cx, cy), 6, (0,0,255), -1)
+            idx0 = int(np.argmin(np.abs(pd_rn - val)))      # Chọn điểm có |depth - val| nhỏ nhất
+            cx, cy = int(pu_rn[idx0]), int(pv_rn[idx0])     # Lấy toạ độ pixel của điểm đại diện
+            cv2.circle(out, (cx, cy), 6, (0,0,255), -1)     # Vẽ hình tròn đỏ
 
             txt2 = f"{val:.2f} m"
             (tw, th), _ = cv2.getTextSize(
                 txt2, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2
             )
             org = (int(o["bbox"][2] - tw), int(o["bbox"][1] - 6))
-            cv2.putText(out, txt2, org,
+            cv2.putText(out, txt2, org,                                 # In text khoảng cách lên ảnh
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,0,255), 2)
 
     return out
 
 # === 13) Main pipeline ===
 if st.button("Run on KITTI sequence"):
-    img_dir   = raw_root/"image_02"/"data"
-    ts_img    = raw_root/"image_02"/"timestamps.txt"
-    velo_dir  = raw_root/"velodyne_points"/"data"
-    ts_velo   = raw_root/"velodyne_points"/"timestamps.txt"
-    cam2cam   = calib_dir/"calib_cam_to_cam.txt"
-    velo2cam  = calib_dir/"calib_velo_to_cam.txt"
+    img_dir   = raw_root/"image_02"/"data"                      # Ảnh màu RGB          
+    ts_img    = raw_root/"image_02"/"timestamps.txt"            # Timestamp ảnh
+    velo_dir  = raw_root/"velodyne_points"/"data"               # Dữ liệu LiDAR
+    ts_velo   = raw_root/"velodyne_points"/"timestamps.txt"     # Timestamp LiDAR
+    cam2cam   = calib_dir/"calib_cam_to_cam.txt"                # Calib camera
+    velo2cam  = calib_dir/"calib_velo_to_cam.txt"               # Calib LiDAR→cam
 
     imgs   = sorted(img_dir.glob("*.png"))
     bins   = sorted(velo_dir.glob("*.txt"))
@@ -268,26 +284,27 @@ if st.button("Run on KITTI sequence"):
     t_vel  = parse_timestamps(ts_velo)
     n      = len(imgs)
 
-    mats      = load_calibration(cam2cam, velo2cam)
-    det_model = load_det_model()
-    seg_model = load_seg_model()
+    mats      = load_calibration(cam2cam, velo2cam)             # Nạp P2, R0, Tr
+    det_model = load_det_model()                                # Load model detect
+    seg_model = load_seg_model()                                # Load model seg
 
-    H, W    = cv2.imread(str(imgs[0])).shape[:2]
+    H, W    = cv2.imread(str(imgs[0])).shape[:2]                # Lấy kích thước frame (từ ảnh đầu)
     outdir  = Path(tempfile.mkdtemp())
-    writers = make_writers(outdir, W, H, fps)
+    writers = make_writers(outdir, W, H, fps)                   # Tạo 4 VideoWriters cho 4 mode
     prog    = st.progress(0.0)
     videos  = {}
 
-    for i in range(n):
+    for i in range(n):                                          # Lặp từng frame ảnh
+        # Đồng bộ LiDAR: chọn index j gần nhất về thời gian so với ảnh i
         j    = int(np.argmin(np.abs(t_vel - t_img[i])))
-        img  = cv2.imread(str(imgs[i]))
-        pc   = np.loadtxt(str(bins[j]), dtype=np.float32).reshape(-1,4)[:,:3]
+        img  = cv2.imread(str(imgs[i]))                                                 # Đọc ảnh i    
+        pc   = np.loadtxt(str(bins[j]), dtype=np.float32).reshape(-1,4)[:,:3]           # Đọc LiDAR j, giữ (x,y,z)
 
-        pc2       = voxel_downsample_centroid(pc, voxel_size)
-        u, v, cam = project_lidar(pc2, mats)
+        pc2       = voxel_downsample_centroid(pc, voxel_size)                           # Giảm số điểm LiDAR bằng voxel centroid
+        u, v, cam = project_lidar(pc2, mats)                                            # Chiếu LiDAR lên ảnh, lấy (u,v), cam_xyz
 
-        bbs  = detect_bboxes(img, det_model, 0.0)
-        segs = detect_segments(img, seg_model, 0.0)
+        bbs  = detect_bboxes(img, det_model, 0.0)                                       # detect bbox    
+        segs = detect_segments(img, seg_model, 0.0)                                     # detect segment
 
         for mode, wr in writers.items():
             frame = visualize(img, u, v, cam, bbs, segs, mode, radius, det_model)
